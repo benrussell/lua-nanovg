@@ -6,36 +6,26 @@
 #define LBIND_IMPLEMENTATION
 #include "lbind.h"
 
-#define LOADGL_STATIC_API
-#ifdef __APPLE__
-#include "gl_2_0_core.h"
+#include <lua.hpp>
+#include "gl.h"
+
+//#include "lua.h"
+//#include "lauxlib.h"
+//#include "lualib.h"
+//#include "luajit.h"
+
 static int opengl_loaded = 0;
 
-#define NANOVG_GL2_IMPLEMENTATION
-#include "nanovg/src/nanovg.h"
-#include "nanovg/src/nanovg_gl.h"
-#undef NANOVG_GL2_IMPLEMENTATION
+#include "nanovg.h"
+#include "nanovg_gl.h"
 
 #define CONTEXT_NEW    nvgCreateGL2
 #define CONTEXT_DELETE nvgDeleteGL2
 
-#else
-#include "gles2.h"
-static int opengl_loaded = 0;
 
-#define NANOVG_GLES2_IMPLEMENTATION
-#include "nanovg/src/nanovg.h"
-#include "nanovg/src/nanovg_gl.h"
-#undef NANOVG_GLES2_IMPLEMENTATION
 
-#define CONTEXT_NEW    nvgCreateGLES2
-#define CONTEXT_DELETE nvgDeleteGLES2
-#endif
-
-#define NANOSVG_IMPLEMENTATION
-#include "nanosvg/src/nanosvg.h"
-#define NANOSVGRAST_IMPLEMENTATION
-#include "nanosvg/src/nanosvgrast.h"
+//#define NANOSVGRAST_IMPLEMENTATION
+//#include "nanosvg/src/nanosvgrast.h"
 
 LBIND_TYPE(lbT_Context, "NanoVG.Context");
 LBIND_TYPE(lbT_Image,   "NanoVG.Image");
@@ -65,11 +55,11 @@ static int Lnew(lua_State *L) {
     static lbind_Enum et = LBIND_INITENUM("CreateFlags", opts);
     int flags;
     NVGcontext *ctx;
-    if (!opengl_loaded) {
-        if (!loadgl_Init())
-            return luaL_error(L, "OpenGL API load failure");
-        opengl_loaded = 1;
-    }
+//    if (!opengl_loaded) {
+//        if (!loadgl_Init())
+//            return luaL_error(L, "OpenGL API load failure");
+//        opengl_loaded = 1;
+//    }
     flags = lbind_optmask(L, 1, 0, &et);
     ctx = CONTEXT_NEW(flags);
     lbind_wrap(L, ctx, &lbT_Context);
@@ -144,21 +134,21 @@ static int LradialGradient(lua_State *L) {
 }
 
 /* state routines */
-
-static int Lclear(lua_State *L) {
-    NVGcolor c = check_color(L, -1);
-    glClearColor(c.r, c.g, c.b, c.r);
-    glClear(GL_COLOR_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
-    lbind_returnself(L);
-}
+//
+//static int Lclear(lua_State *L) {
+//    NVGcolor c = check_color(L, -1);
+//    glClearColor(c.r, c.g, c.b, c.r);
+//    glClear(GL_COLOR_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
+//    lbind_returnself(L);
+//}
 
 static int LbeginFrame(lua_State *L) {
     NVGcontext *ctx = check_context(L, 1);
-    GLsizei w = (GLsizei)luaL_checkinteger(L, 2);
-    GLsizei h = (GLsizei)luaL_checkinteger(L, 3);
-    float ratio = (float)luaL_optnumber(L, 4, 1.0);
-    glViewport(0, 0, w*ratio, h*ratio);
-    nvgBeginFrame(ctx, w, h, ratio);
+    int w = luaL_checkinteger(L, 2);
+    int h = luaL_checkinteger(L, 3);
+//    float ratio = (float)luaL_optnumber(L, 4, 1.0);
+//    glViewport(0, 0, w*ratio, h*ratio);
+    nvgBeginFrame(ctx, w, h, 1.f);
     lbind_returnself(L);
 }
 
@@ -738,7 +728,7 @@ static int LfillStyle(lua_State *L) {
 
 /* register lua routines */
 
-LBLIB_API int luaopen_nvg(lua_State *L) {
+LBLIB_API "C" int luaopen_nvg(lua_State *L) {
     luaL_Reg libs[] = {
 #define ENTRY(name) { #name, L##name }
         /* meta-methods */
@@ -750,7 +740,7 @@ LBLIB_API int luaopen_nvg(lua_State *L) {
         ENTRY(boxGradient),
         ENTRY(radialGradient),
         /* state routines */
-        ENTRY(clear),
+//        ENTRY(clear),
         ENTRY(beginFrame),
         ENTRY(cancelFrame),
         ENTRY(endFrame),
@@ -911,32 +901,33 @@ static int Limage_load(lua_State *L) {
     // defaults
     float ex = 0.0f;
     float ey = 0.0f;
-    if (lbE_stricmp(".svg", ext, 4) == 0) {
-        // is SVG
-        NSVGrasterizer *rast = nsvgCreateRasterizer();
-        if (rast == NULL) {
-            return luaL_error(L, "Failed allocating rasterizer");
-        }
-        NSVGimage *vector = nsvgParseFromFile(filename, "px", dpi);
-        if (vector != NULL) {
-            int w = (int)vector->width;
-            int h = (int)vector->height;
-            unsigned char* img = malloc(w * h * 4);
-            if (img == NULL) {
-                return luaL_error(L, "Failed allocating raster image buffer");
-            } else {
-                nsvgRasterize(rast, vector, 0,0,1, img, w, h, w*4);
-                imageid = nvgCreateImageRGBA(ctx, w, h, flags, img);
-                if (imageid > 0) {
-                    ex = w;
-                    ey = h;
-                }
-            }
-        }
-        if (rast != NULL) {
-            nsvgDeleteRasterizer(rast);
-        }
-    } else {
+//    if (lbE_stricmp(".svg", ext, 4) == 0) {
+//        // is SVG
+//        NSVGrasterizer *rast = nsvgCreateRasterizer();
+//        if (rast == NULL) {
+//            return luaL_error(L, "Failed allocating rasterizer");
+//        }
+//        NSVGimage *vector = nsvgParseFromFile(filename, "px", dpi);
+//        if (vector != NULL) {
+//            int w = (int)vector->width;
+//            int h = (int)vector->height;
+//            unsigned char* img = malloc(w * h * 4);
+//            if (img == NULL) {
+//                return luaL_error(L, "Failed allocating raster image buffer");
+//            } else {
+//                nsvgRasterize(rast, vector, 0,0,1, img, w, h, w*4);
+//                imageid = nvgCreateImageRGBA(ctx, w, h, flags, img);
+//                if (imageid > 0) {
+//                    ex = w;
+//                    ey = h;
+//                }
+//            }
+//        }
+//        if (rast != NULL) {
+//            nsvgDeleteRasterizer(rast);
+//        }
+//    } else
+    {
         imageid = nvgCreateImage(ctx, filename, flags);
     }
     if (imageid < 0)
